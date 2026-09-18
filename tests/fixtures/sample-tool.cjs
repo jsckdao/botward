@@ -1,0 +1,1 @@
+module.exports = { name: "sample", run: async ({x}) => ({doubled: x*2}) };

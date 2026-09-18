@@ -1,0 +1,26 @@
+{
+  "name": "Basic",
+  "version": "0.1.0",
+  "description": "smoke test config",
+  "provider": "anthropic",
+  "systemPrompt": "You are a helpful assistant.",
+  "skills": [
+    {
+      "name": "math",
+      "description": "math helpers",
+      "content": "Use addition for sums."
+    }
+  ],
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Echo back input",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "msg": { "type": "string" } },
+        "required": ["msg"]
+      },
+      "code": "module.exports = async ({ msg }) => ({ echoed: msg });"
+    }
+  ]
+}
