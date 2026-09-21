@@ -21,11 +21,11 @@ botward execute -c botward.json 'Add new feature to the CMS project!. ....'
 # -o 指向主配置文件的路径, 其所在目录就是项目根目录
 botward init -o botward.json '一个能读项目源文件并回显第一行的 agent'
 
-# 开始一个聊天会话, ai 会根据于你的对话来一步步完成任务
+# 开始一个聊天会话, ai 会根据于你的对话来一步步完成任务 (计划中, 暂未实现)
 botward chat -c botward.json
 
 # 开一个服务, 用户可通过 http 请求来开启新任务, 每个任务是个单独 agent 实例.
-# --workers 设置可并发执行的任务数, 默认为1, 暂时无法处理的任务会排队.
+# --workers 设置可并发执行的任务数, 默认为1, 暂时无法处理的任务会排队. (计划中, 暂未实现)
 botward serve -c botward.json -p 8080 --workers 1
 
 ```
@@ -60,3 +60,88 @@ botward serve -c botward.json -p 8080 --workers 1
 }
 ```
 
+## API 使用
+
+`botward` 同时也是一个可以被 import 的库. CLI 只是它的薄包装, 你可以在 Node 里直接驱动同一个引擎.
+
+```javascript
+import Botward from 'botward';
+
+const botward = new Botward({
+  providers: [{
+    type: 'anthropic',
+    baseUrl: 'https://api.anthropic.com/v1',
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  }]
+});
+
+// 跟 botward init 一样, 自动 mkdir, 多文件项目, 不写 stdout
+const { outputPath, result } = await botward.init(
+  '一个能读项目源文件并回显第一行的 agent',
+  { output: 'botward.json' }
+);
+
+// 跟 botward execute 一样, 复用同一个 agent loop
+const { finalText, iterations } = await botward.execute(
+  'Add new feature to the CMS project!. ....',
+  { config: 'botward.json' }
+);
+```
+
+### `new Botward(options)`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `providers` | `ProviderConfig[]` | 必填, 至少一个. 每个 type (`anthropic` / `openai`) 只允许出现一次; 想换模型请用 `model` 字段, 而不是新增条目. |
+| `cwd` | `string?` | 默认 `process.cwd()`. 用来解析相对路径的 `config` / `output`. |
+| `llmFactory` | `(config, opts) => LLMClient?` | 测试用钩子. 留空走内置工厂. |
+
+`ProviderConfig`:
+
+```ts
+{ type: 'anthropic' | 'openai', apiKey?: string, baseUrl?: string, model?: string }
+```
+
+### `botward.execute(task, { config }) -> Promise<AgentRunResult>`
+
+读取 `config` 指向的 `botward.json`, 跑和 `botward execute` 完全相同的 agent loop.
+返回 `{ finalText, iterations, stopReason }`. 不向 stdout 写任何东西.
+出错抛 `BotwardError`.
+
+### `botward.init(requirements, { output, provider?, model? }) -> Promise<InitResult>`
+
+和 `botward init` 同引擎. 自动创建 `output` 的目录. 返回
+`{ result, outputPath, outputDir, provider, model }`. 模型没写出主配置时抛 `BotwardError`.
+
+### Provider 解析规则
+
+`providers` 是一个有序数组, 解析顺序:
+
+1. 构造时拒绝空数组 / 未知 `type` / 重复 `type`.
+2. `execute` 找 `type === config.provider` 的条目, 把它当作 `apiKey` / `baseUrl` / `model` 的来源; 找不到就回落到环境变量和 SDK 默认值(行为与 CLI 一致).
+3. `init` 不传 `provider` 时, 选**第一个有非空 apiKey** 的条目; 显式 `provider` 必须能匹配一个条目, 否则抛错.
+
+### 错误处理
+
+库抛出的所有错误都是 `BotwardError`, 可以用 `instanceof` 过滤:
+
+```js
+import Botward, { BotwardError } from 'botward';
+try {
+  await botward.execute(task, { config });
+} catch (err) {
+  if (err instanceof BotwardError) { /* 可预期 */ }
+  else throw err;
+}
+```
+
+### Named exports
+
+```ts
+import Botward, {
+  BotwardError,
+  type Config,
+  type LLMClient,
+  type AgentRunResult,
+} from 'botward';
+```

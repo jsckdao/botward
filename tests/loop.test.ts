@@ -4,20 +4,8 @@ import { runAgent } from '../src/agent/loop.js';
 import { composeSystemPrompt } from '../src/agent/prompt.js';
 import { loadConfig } from '../src/config/loader.js';
 import { loadTools } from '../src/tools/loader.js';
-import type { LLMClient, ChatRequest, ChatResponse } from '../src/llm/types.js';
-
-class ScriptedLLM implements LLMClient {
-  responses: ChatResponse[];
-  calls = 0;
-  constructor(responses: ChatResponse[]) {
-    this.responses = responses;
-  }
-  async chat(_req: ChatRequest): Promise<ChatResponse> {
-    const r = this.responses[this.calls++];
-    if (!r) throw new Error(`ScriptedLLM: no response for call ${this.calls}`);
-    return r;
-  }
-}
+import type { LLMClient } from '../src/llm/types.js';
+import { ScriptedLLM } from './helpers/scripted-llm.js';
 
 const fixturesDir = path.resolve('tests/fixtures');
 

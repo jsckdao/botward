@@ -1,5 +1,5 @@
 import type { Config } from '../config/schema.js';
-import type { LLMClient } from '../llm/types.js';
+import type { LLMClient, ToolResult, UnifiedMessage } from '../llm/types.js';
 import type { LoadedTool } from '../tools/sandbox.js';
 import { logger } from '../utils/logger.js';
 import { BotwardError } from '../utils/errors.js';
@@ -34,7 +34,7 @@ export async function runAgent(
   deps: RunAgentDeps,
 ): Promise<AgentRunResult> {
   const { llm, tools, config, system } = deps;
-  const messages: import('../llm/types.js').UnifiedMessage[] = [
+  const messages: UnifiedMessage[] = [
     { role: 'user', content: task },
   ];
 
@@ -74,7 +74,7 @@ export async function runAgent(
     }
 
     // Execute each requested tool; never let a tool crash the loop.
-    const results: import('../llm/types.js').ToolResult[] = [];
+    const results: ToolResult[] = [];
     for (const call of toolCalls) {
       const tool = toolByName.get(call.name);
       if (!tool) {
@@ -110,7 +110,7 @@ export async function runAgent(
 function safeStringify(value: unknown, maxBytes: number): string {
   let s: string;
   try {
-    s = JSON.stringify(value, (_key, v) => v ?? null, 2);
+    s = JSON.stringify(value, (_key, v) => v ?? null);
   } catch {
     s = String(value);
   }

@@ -9,21 +9,7 @@ import {
   runInit,
 } from '../src/cli/commands/init.js';
 import { ConfigSchema } from '../src/config/schema.js';
-import type { LLMClient, ChatRequest, ChatResponse } from '../src/llm/types.js';
-
-/** Minimal LLMClient that walks through a queue of scripted responses. */
-class ScriptedLLM implements LLMClient {
-  responses: ChatResponse[];
-  calls = 0;
-  constructor(responses: ChatResponse[]) {
-    this.responses = responses;
-  }
-  async chat(_req: ChatRequest): Promise<ChatResponse> {
-    const r = this.responses[this.calls++];
-    if (!r) throw new Error(`ScriptedLLM: no response for call ${this.calls}`);
-    return r;
-  }
-}
+import { ScriptedLLM } from './helpers/scripted-llm.js';
 
 const VALID_CONFIG = JSON.stringify({
   name: 'Echo bot',
