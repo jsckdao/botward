@@ -1,6 +1,6 @@
 {
   "name": "botward",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A minimal single-task AI agent CLI for unsupervised tasks (e.g. webhook handlers)",
   "type": "module",
   "main": "dist/index.js",
