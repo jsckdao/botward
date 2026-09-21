@@ -38,6 +38,9 @@ botward serve -c botward.json -p 8080 --workers 1
   "version": "0.1.0",
   "description": "A chatbot for developers",
   "systemPrompt": "You are a ....",
+  "maxContextLength": "256k",
+  "maxContextLengthRatio": 0.9,
+  "contextCompression": true,
   "skills": [{
     "name": "webDev",
     "description": "A skill for web development",
@@ -60,6 +63,16 @@ botward serve -c botward.json -p 8080 --workers 1
 
 }
 ```
+
+### 上下文压缩字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `maxContextLength` | `string \| number` | `262144` (≈256k) | 输入 token 总预算。接受 `"256k"`、`"1m"` 或纯数字。 |
+| `maxContextLengthRatio` | `number` (0.1–0.99) | `0.9` | 触发比例。当上一轮 `inputTokens / maxContextLength >= ratio` 时，下一轮压缩。 |
+| `contextCompression` | `boolean` | `true` | 总开关。设为 `false` 完全关闭压缩，超窗口时让 LLM 自然报错。 |
+
+压缩策略：当 `lastInputTokens >= ratio * maxContextLength` 时，保留系统提示、技能 / 工具列表、用户任务和最近 3 轮工具调用不变；将更早的历史发送给 LLM 压缩为一段 prose summary，插入到保留块前面。Anthropic / OpenAI 的 prompt cache 会在压缩后失效一次，下一轮重新写入。
 
 ## API 使用
 

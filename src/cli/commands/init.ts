@@ -142,6 +142,9 @@ export function buildInitConfig(opts: BuildConfigOpts): Config {
       inputSchema: {},
       permission: scope,
     })),
+    contextCompression: true,
+    maxContextLength: 262_144,
+    maxContextLengthRatio: 0.9,
   };
 }
 

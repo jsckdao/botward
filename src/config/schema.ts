@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BUILTIN_TOOL_NAMES } from '../tools/builtin/registry.js';
+import { parseContextLength } from './units.js';
 
 /**
  * Skill can be inline (`content`) or a directory of files (`dir`).
@@ -60,6 +61,30 @@ export const ToolSchema = z
 
 export const ProviderSchema = z.enum(['anthropic', 'openai']);
 
+/**
+ * Context length accepts either a raw positive integer or a string with a
+ * unit suffix (`"256k"`, `"1m"`, `"262144"`). Internal storage is always a
+ * positive integer representing tokens. See `src/config/units.ts` for the
+ * accepted grammar.
+ */
+export const ContextLengthSchema = z
+  .union([z.number().int().positive(), z.string().min(1)])
+  .transform((v, ctx) => {
+    if (typeof v === 'number') return v;
+    const parsed = parseContextLength(v);
+    if (parsed === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `invalid context length "${v}" (expected forms: "256k", "1m", "262144")`,
+      });
+      return z.NEVER;
+    }
+    return parsed;
+  });
+
+/** Trigger ratio in (0, 1) — fires compression when lastInputTokens / maxContextLength >= ratio. */
+export const ContextCompressionRatioSchema = z.number().min(0.1).max(0.99);
+
 export const ConfigSchema = z.object({
   name: z.string().min(1),
   version: z.string().default('0.0.0'),
@@ -67,7 +92,15 @@ export const ConfigSchema = z.object({
   systemPrompt: z.string().optional(),
   provider: ProviderSchema.default('anthropic'),
   model: z.string().optional(),
-  maxIterations: z.number().int().positive().default(20),
+  maxIterations: z.number().int().positive().default(50),
+  // Master switch for context compression. When false, compression is skipped
+  // entirely and the LLM surfaces its own context-window errors.
+  contextCompression: z.boolean().default(true),
+  // Total input-token budget for system + tools + messages.
+  maxContextLength: ContextLengthSchema.default(262_144),
+  // Trigger ratio. When lastInputTokens / maxContextLength >= ratio, compress
+  // before the next llm.chat call.
+  maxContextLengthRatio: ContextCompressionRatioSchema.default(0.9),
   skills: z.array(SkillSchema).default([]),
   tools: z.array(ToolSchema).default([]),
 });

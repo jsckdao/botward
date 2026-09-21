@@ -3,6 +3,11 @@ import type { LLMClient, ToolResult, UnifiedMessage } from '../llm/types.js';
 import type { LoadedTool } from '../tools/sandbox.js';
 import { logger } from '../utils/logger.js';
 import { BotwardError } from '../utils/errors.js';
+import {
+  KEEP_RECENT_TURNS,
+  compressMessages,
+  shouldCompress,
+} from './compression.js';
 
 export interface AgentRunResult {
   /** Last assistant text. Empty string if the model never produced one. */
@@ -34,7 +39,7 @@ export async function runAgent(
   deps: RunAgentDeps,
 ): Promise<AgentRunResult> {
   const { llm, tools, config, system } = deps;
-  const messages: UnifiedMessage[] = [
+  let messages: UnifiedMessage[] = [
     { role: 'user', content: task },
   ];
 
@@ -49,8 +54,38 @@ export async function runAgent(
 
   let finalText = '';
   let lastStopReason = 'end_turn';
+  // Tracks input tokens from the previous turn so we can decide whether to
+  // compress before the next llm.chat call. Undefined for the first iteration.
+  let lastInputTokens: number | undefined;
 
   for (let iter = 0; iter < config.maxIterations; iter++) {
+    // Pre-flight: compress older history if the previous response crossed the
+    // configured threshold. The user task at messages[0] and the system prompt
+    // are never touched.
+    const decision = shouldCompress(
+      {
+        enabled: config.contextCompression,
+        maxContextLength: config.maxContextLength,
+        ratio: config.maxContextLengthRatio,
+      },
+      lastInputTokens,
+    );
+    if (decision.shouldCompress) {
+      const before = messages.length;
+      messages = await compressMessages(
+        messages,
+        KEEP_RECENT_TURNS,
+        llm,
+        config.model,
+      );
+      if (messages.length !== before) {
+        logger.info(
+          `context compressed: ${before} -> ${messages.length} msgs ` +
+            `(last in_tokens=${lastInputTokens}, threshold=${Math.round(decision.threshold)})`,
+        );
+      }
+    }
+
     const resp = await llm.chat({
       model: config.model,
       system,
@@ -60,6 +95,7 @@ export async function runAgent(
 
     if (resp.usage) {
       const { inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens } = resp.usage;
+      lastInputTokens = inputTokens;
       const parts = [
         `in=${inputTokens}`,
         `out=${outputTokens}`,
