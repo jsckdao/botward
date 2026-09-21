@@ -174,7 +174,7 @@ class TimeoutError extends Error {
   override readonly name = 'TimeoutError';
 }
 
-function runWithTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+async function runWithTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(

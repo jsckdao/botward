@@ -1,21 +1,108 @@
 # Botward
 
-A minimal single-task AI agent CLI. Read [README_ZH.md](./README_ZH.md) for the
-Chinese overview and config file format reference.
+Botward is an extremely simple AI agent, primarily positioned to handle
+specific single tasks that don't require human supervision — for example,
+acting as a handler for webhooks from external services.
+
+It is **not** designed as a general-purpose agent, nor even one that retains
+long-term complex memory. Its memory system only exists to complete a single
+task.
+
+It is simple to use: you can easily spawn multiple agent instances locally
+in parallel to execute tasks concurrently.
 
 ## Quick start
 
 ```bash
 # Install
-npm install
+npm install botward -g
 
 # Run a task with a config file
-npm run dev -- execute "summarize the README" -c tests/fixtures/basic.json
+botward execute "summarize the README" -c tests/fixtures/basic.json
 
-# Or build and use the bundled CLI
-npm run build
-./dist/cli.js execute "..." -c botward.json
 ```
+
+## Config file
+
+```json
+{
+  "name": "Botward",
+  "version": "0.1.0",
+  "description": "A chatbot for developers",
+  "systemPrompt": "You are a ....",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-5",
+  "maxIterations": 50,
+  "maxContextLength": "256k",
+  "maxContextLengthRatio": 0.9,
+  "contextCompression": true,
+  "skills": [{
+    "name": "webDev",
+    "description": "A skill for web development",
+    "content": "...",
+    "dir": "path/to/skill/dir"
+  }],
+  "tools": [{
+    "name": "read_file",
+    "description": "Read a file from the workspace",
+    "inputSchema": { "type": "object", "properties": { "path": { "type": "string" } } },
+    "permission": "workspace/*/*.js",
+    "code": "// cjs code ...",
+    "file": "tools/read_file.cjs"
+  }]
+}
+```
+
+### Top-level fields
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `name` | string | required | Project name |
+| `version` | string | `"0.0.0"` | Version |
+| `description` | string? | — | Description |
+| `systemPrompt` | string? | — | System prompt |
+| `provider` | `"anthropic"` \| `"openai"` | `"anthropic"` | LLM provider |
+| `model` | string? | SDK default | Model name |
+| `maxIterations` | number (positive int) | `50` | Hard cap on agent loop turns per task |
+| `contextCompression` | boolean | `true` | Enable context compression (see below) |
+| `maxContextLength` | string \| number | `262144` (≈256k) | Input token budget; accepts `"256k"`, `"1m"`, or raw integer |
+| `maxContextLengthRatio` | number (0.1–0.99) | `0.9` | Threshold ratio that triggers compression |
+| `skills` | Skill[] | `[]` | Skill list (see below) |
+| `tools` | Tool[] | `[]` | Tool list (see below) |
+
+### Context compression
+
+When the previous response's `inputTokens >= maxContextLength * maxContextLengthRatio`, the next request compresses older history first:
+
+- Always preserved: `systemPrompt`, skill list, tool list, user task
+- Last 3 turns of tool calls (assistant tool_use + user tool_result) kept verbatim
+- Older history sent for LLM summary, inserted as a single prose message before the kept-recent block
+- Summary call failures are warned-and-skipped; the next iteration retries
+
+Anthropic / OpenAI prompt cache invalidates once after compression (prefix changes), then rebuilds on the next call.
+
+### Skill
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | ✓ | Skill name |
+| `description` | string | — | Description, default `""` |
+| `content` | string? | — | Inline content; at least one of `content` / `dir` is required; `content` wins when both are set |
+| `dir` | string? | — | Path to a skill directory; the loader reads `<dir>/SKILL.md` |
+
+### Tool
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | ✓ | Tool name; if it matches a built-in (`read_file`, etc.), `code`/`file` are optional |
+| `description` | string | — | Description, default `""` |
+| `inputSchema` | object | — | JSON schema for the input, default `{ type: 'object', properties: {}, additionalProperties: true }` |
+| `code` | string? | * | Inline CJS source (mutually exclusive with `file`; required for non-built-in tools) |
+| `file` | string? | * | Path to a CJS file (mutually exclusive with `code`) |
+| `maxOutputBytes` | number? | — | Hard cap on tool output bytes (protects the context window) |
+| `timeoutMs` | number? | — | Per-call `run()` timeout in milliseconds |
+| `permission` | string \| string[]? | — | Permission expression; syntax defined per tool |
+| `permissionFile` | string? | — | Path to a JSON array of permission expressions |
 
 ## Commands
 
