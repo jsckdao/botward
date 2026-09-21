@@ -58,6 +58,19 @@ export async function runAgent(
       tools: toolSpecs,
     });
 
+    if (resp.usage) {
+      const { inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens } = resp.usage;
+      const parts = [
+        `in=${inputTokens}`,
+        `out=${outputTokens}`,
+      ];
+      if (cacheCreationTokens) parts.push(`cache_write=${cacheCreationTokens}`);
+      if (cacheReadTokens) parts.push(`cache_read=${cacheReadTokens}`);
+      logger.info(`turn ${iter + 1} tokens: ${parts.join(' ')}`);
+    } else {
+      logger.info(`turn ${iter + 1}: (no usage reported)`);
+    }
+
     messages.push(resp.message);
     lastStopReason = resp.stopReason;
 

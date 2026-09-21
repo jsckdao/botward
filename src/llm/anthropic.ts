@@ -1,5 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type {
+  BetaCacheControlEphemeral,
+  BetaMessage,
+  BetaMessageParam,
+  BetaTextBlockParam,
+  BetaTool,
+  BetaToolResultBlockParam,
+  BetaToolUseBlockParam,
+} from '@anthropic-ai/sdk/resources/beta/messages/messages';
+import type {
   ChatRequest,
   ChatResponse,
   LLMClient,
@@ -34,23 +43,33 @@ export class AnthropicClient implements LLMClient {
   }
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
-    const system = req.system;
     const messages = req.messages.map(toAnthropicMessage);
 
-    const tools = req.tools.map((t) => ({
+    // System + tools + last tool_result each carry a cache_control breakpoint.
+    // Using the beta endpoint because SDK 0.32 only exposes cache_control in the
+    // beta type space; the underlying URL is the same /v1/messages endpoint.
+    const system: BetaTextBlockParam[] = [
+      { type: 'text', text: req.system, cache_control: { type: 'ephemeral' } },
+    ];
+
+    const tools: BetaTool[] = req.tools.map((t, i, arr) => ({
       name: t.name,
       description: t.description,
-      input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+      input_schema: t.inputSchema as BetaTool.InputSchema,
+      ...(i === arr.length - 1
+        ? { cache_control: { type: 'ephemeral' } satisfies BetaCacheControlEphemeral }
+        : {}),
     }));
 
     try {
-      const resp = await this.client.messages.create({
+      const resp = await this.client.beta.messages.create({
         model: req.model ?? this.model,
         system,
         messages,
         tools: tools.length > 0 ? tools : undefined,
         max_tokens: req.maxTokens ?? 4096,
         temperature: req.temperature,
+        betas: ['prompt-caching-2024-07-31'],
       });
       return fromAnthropicResponse(resp);
     } catch (err) {
@@ -64,10 +83,10 @@ export class AnthropicClient implements LLMClient {
 
 // ---- helpers --------------------------------------------------------------
 
-function toAnthropicMessage(m: UnifiedMessage): Anthropic.MessageParam {
+function toAnthropicMessage(m: UnifiedMessage): BetaMessageParam {
   // assistant message: may contain text blocks AND tool_use blocks.
   if (m.role === 'assistant') {
-    const blocks: Array<Anthropic.TextBlockParam | Anthropic.ToolUseBlockParam> = [];
+    const blocks: Array<BetaTextBlockParam | BetaToolUseBlockParam> = [];
     if (typeof m.content === 'string') {
       if (m.content.length > 0) blocks.push({ type: 'text', text: m.content });
     } else {
@@ -93,11 +112,16 @@ function toAnthropicMessage(m: UnifiedMessage): Anthropic.MessageParam {
   // user message: either plain text OR a tool_result block(s) when previous
   // assistant turn issued tool calls.
   if (m.toolResults && m.toolResults.length > 0) {
-    const blocks: Anthropic.ToolResultBlockParam[] = m.toolResults.map((r) => ({
+    // Mark the last tool_result with cache_control so the entire preceding
+    // history (system + tools + messages up through this block) is cached.
+    const blocks: BetaToolResultBlockParam[] = m.toolResults.map((r, i, arr) => ({
       type: 'tool_result',
       tool_use_id: r.toolCallId,
       content: r.content,
       is_error: r.isError,
+      ...(i === arr.length - 1
+        ? { cache_control: { type: 'ephemeral' } satisfies BetaCacheControlEphemeral }
+        : {}),
     }));
     return { role: 'user', content: blocks };
   }
@@ -110,7 +134,7 @@ function toAnthropicMessage(m: UnifiedMessage): Anthropic.MessageParam {
   return { role: 'user', content: text };
 }
 
-function fromAnthropicResponse(resp: Anthropic.Message): ChatResponse {
+function fromAnthropicResponse(resp: BetaMessage): ChatResponse {
   const textParts: string[] = [];
   const toolCalls: ToolCall[] = [];
 
@@ -135,13 +159,18 @@ function fromAnthropicResponse(resp: Anthropic.Message): ChatResponse {
   const stopReason = mapStopReason(resp.stop_reason);
 
   const usage = resp.usage
-    ? { inputTokens: resp.usage.input_tokens, outputTokens: resp.usage.output_tokens }
+    ? {
+        inputTokens: resp.usage.input_tokens,
+        outputTokens: resp.usage.output_tokens,
+        cacheCreationTokens: resp.usage.cache_creation_input_tokens ?? undefined,
+        cacheReadTokens: resp.usage.cache_read_input_tokens ?? undefined,
+      }
     : undefined;
 
   return { message, stopReason, usage };
 }
 
-function mapStopReason(s: Anthropic.Message['stop_reason']): StopReason {
+function mapStopReason(s: BetaMessage['stop_reason']): StopReason {
   switch (s) {
     case 'end_turn':
       return 'end_turn';

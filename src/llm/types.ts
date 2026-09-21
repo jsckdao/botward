@@ -48,7 +48,14 @@ export interface ChatRequest {
 export interface ChatResponse {
   message: UnifiedMessage;
   stopReason: StopReason;
-  usage?: { inputTokens: number; outputTokens: number };
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    /** Tokens written to cache on this request (Anthropic cache_creation_input_tokens). */
+    cacheCreationTokens?: number;
+    /** Tokens read from cache on this request (Anthropic cache_read_input_tokens; OpenAI cached_tokens). */
+    cacheReadTokens?: number;
+  };
 }
 
 export interface LLMClient {

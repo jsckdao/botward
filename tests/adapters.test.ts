@@ -3,8 +3,6 @@ import { AnthropicClient } from '../src/llm/anthropic.js';
 import { OpenAIClient } from '../src/llm/openai.js';
 import type {
   ChatRequest,
-  ChatResponse,
-  UnifiedMessage,
 } from '../src/llm/types.js';
 
 interface StubOptions<T> {
@@ -18,6 +16,14 @@ function stubAnthropic(opts: StubOptions<unknown>) {
       create: async (req: any) => {
         if (opts.capture) opts.capture.request = req;
         return opts.response;
+      },
+    },
+    beta: {
+      messages: {
+        create: async (req: any) => {
+          if (opts.capture) opts.capture.request = req;
+          return opts.response;
+        },
       },
     },
   };
@@ -75,14 +81,21 @@ describe('AnthropicClient', () => {
     expect(resp.stopReason).toBe('end_turn');
     expect(resp.message.content).toBe('3');
 
-    // Verify request shape: system param, user message with 2 tool_result blocks
-    expect(cap.request!.system).toBe('be terse');
+    // Verify request shape: system is now a text-block array (so cache_control
+    // can be attached), and the user message carries 2 tool_result blocks.
+    expect(cap.request!.system).toEqual([
+      { type: 'text', text: 'be terse', cache_control: { type: 'ephemeral' } },
+    ]);
     const userMsg = cap.request!.messages[0];
     expect(userMsg.role).toBe('user');
     expect(Array.isArray(userMsg.content)).toBe(true);
     expect(userMsg.content).toHaveLength(2);
     expect(userMsg.content[0]).toMatchObject({ type: 'tool_result', tool_use_id: 't1' });
-    expect(userMsg.content[1]).toMatchObject({ type: 'tool_result', tool_use_id: 't2', is_error: true });
+    expect(userMsg.content[1]).toMatchObject({
+      type: 'tool_result',
+      tool_use_id: 't2',
+      is_error: true,
+    });
   });
 
   it('translates assistant tool_calls into tool_use blocks', async () => {
@@ -138,6 +151,62 @@ describe('AnthropicClient', () => {
     expect(resp.message.toolCalls).toEqual([
       { id: 'call_1', name: 'sum', arguments: { a: 1, b: 2 } },
     ]);
+  });
+
+  it('attaches cache_control to system, last tool, and last tool_result', async () => {
+    const cap: { request?: any } = {};
+    const client = new AnthropicClient({ apiKey: 'sk-fake' });
+    (client as any).client = stubAnthropic({
+      capture: cap,
+      response: {
+        id: 'msg_cache',
+        content: [{ type: 'text', text: 'ok' }],
+        stop_reason: 'end_turn',
+      },
+    });
+
+    await client.chat({
+      ...baseReq,
+      tools: [
+        ...baseReq.tools,
+        {
+          name: 'diff',
+          description: 'subtract',
+          inputSchema: { type: 'object', properties: { a: { type: 'number' } } },
+        },
+      ],
+      messages: [
+        {
+          role: 'user',
+          content: '',
+          toolResults: [
+            ...baseReq.messages[0].toolResults!,
+            { toolCallId: 't3', content: '5' },
+          ],
+        },
+      ],
+    });
+
+    // system: 1-element array with cache_control on the (only) block
+    const sys = cap.request!.system;
+    expect(Array.isArray(sys)).toBe(true);
+    expect(sys).toHaveLength(1);
+    expect(sys[0].cache_control).toEqual({ type: 'ephemeral' });
+
+    // tools: only the LAST tool carries cache_control
+    const tools = cap.request!.tools;
+    expect(tools).toHaveLength(2);
+    expect(tools[0].cache_control).toBeUndefined();
+    expect(tools[tools.length - 1].cache_control).toEqual({ type: 'ephemeral' });
+
+    // tool_results: only the LAST result carries cache_control
+    const trs = cap.request!.messages[0].content;
+    expect(trs).toHaveLength(3);
+    expect(trs[0].cache_control).toBeUndefined();
+    expect(trs[trs.length - 1].cache_control).toEqual({ type: 'ephemeral' });
+
+    // beta header for prompt caching is set
+    expect(cap.request!.betas).toContain('prompt-caching-2024-07-31');
   });
 });
 

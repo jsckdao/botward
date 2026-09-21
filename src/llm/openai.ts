@@ -156,7 +156,11 @@ function fromOpenAIResponse(
     },
     stopReason: mapStopReason(choice.finish_reason),
     usage: usage
-      ? { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens }
+      ? {
+          inputTokens: usage.prompt_tokens,
+          outputTokens: usage.completion_tokens,
+          cacheReadTokens: usage.prompt_tokens_details?.cached_tokens ?? undefined,
+        }
       : undefined,
   };
 }
