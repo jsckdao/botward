@@ -1,7 +1,7 @@
 {
   "name": "botward",
   "version": "0.1.0",
-  "description": "A minimal single-task AI agent CLI",
+  "description": "A minimal single-task AI agent CLI for unsupervised tasks (e.g. webhook handlers)",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -19,7 +19,8 @@
   "files": [
     "dist",
     "README.md",
-    "README_ZH.md"
+    "README_ZH.md",
+    "LICENSE"
   ],
   "scripts": {
     "dev": "tsx src/cli/index.ts",
@@ -49,8 +50,28 @@
   "keywords": [
     "ai",
     "agent",
-    "cli"
+    "cli",
+    "anthropic",
+    "openai",
+    "claude",
+    "gpt",
+    "llm",
+    "automation",
+    "webhook",
+    "zod"
   ],
-  "author": "",
-  "license": "ISC"
+  "author": {
+    "name": "jsckdao",
+    "url": "https://github.com/jsckdao"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jsckdao/botward.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jsckdao/botward/issues"
+  },
+  "homepage": "https://github.com/jsckdao/botward#readme",
+  "private": false
 }

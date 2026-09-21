@@ -11,6 +11,8 @@ task.
 It is simple to use: you can easily spawn multiple agent instances locally
 in parallel to execute tasks concurrently.
 
+中文 README 见 [README_ZH.md](README_ZH.md)
+
 ## Quick start
 
 ```bash
