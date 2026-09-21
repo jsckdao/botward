@@ -39,8 +39,11 @@ export const ToolSchema = z
     // Hard cap on each tool run() call.
     timeoutMs: z.number().int().positive().optional(),
     // Permission expression — syntax defined per built-in tool, ignored by
-    // user tools unless they opt in.
-    permission: z.string().optional(),
+    // user tools unless they opt in. Accepts a single pattern or an array
+    // (each entry OR-combined with `permissionFile` entries).
+    permission: z
+      .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+      .optional(),
     // Path to a JSON array of strings, joined with `permission` as OR.
     permissionFile: z.string().optional(),
   })

@@ -49,7 +49,8 @@ botward serve -c botward.json -p 8080 --workers 1
   "tools": [{
     "name": "read-file",
     // 权限表达式, 具体格式依据不同的 tool 来定义. 可选
-    "permission": "workspace/*/*.js",
+    "permission": "workspace/*/*.js",  // 或 ["workspace/*/*.js", "tests/**"]
+    // 也可写数组, 每个元素是一条表达式, 跟 permissionFile 等效但内联.
     // 写入权限表达式的文件路径, 可以是任何格式的文件, 具体如何解析依据不同的 tool 来决定. 可选
     "permissionFile": "read_file_permission.json",
     "description": "A tool for read file",

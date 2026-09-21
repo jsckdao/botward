@@ -93,4 +93,55 @@ describe('resolvePermissions', () => {
       await fs.unlink(file);
     }
   });
+
+  describe('permission as string[]', () => {
+    it('puts the first entry in `expression` and the rest in `extraPatterns`', async () => {
+      const r = await resolvePermissions(
+        { permission: ['git *', 'npm test', 'ls *'] },
+        tmp,
+      );
+      expect(r?.expression).toBe('git *');
+      expect(r?.extraPatterns).toEqual(['npm test', 'ls *']);
+    });
+
+    it('combines permission array with permissionFile (full OR)', async () => {
+      const file = path.join(tmp, '__perms.json');
+      await fs.writeFile(file, '["make *", "echo *"]');
+      try {
+        const r = await resolvePermissions(
+          { permission: ['git *', 'npm test'], permissionFile: '__perms.json' },
+          tmp,
+        );
+        expect(r?.expression).toBe('git *');
+        expect(r?.extraPatterns).toEqual(['npm test', 'make *', 'echo *']);
+      } finally {
+        await fs.unlink(file);
+      }
+    });
+
+    it('throws when the array contains an empty string', async () => {
+      await expect(
+        // @ts-expect-error — runtime check for malformed input
+        resolvePermissions({ permission: ['git *', ''] }, tmp),
+      ).rejects.toThrow(/non-empty/);
+    });
+
+    it('throws when the array is empty', async () => {
+      await expect(
+        resolvePermissions({ permission: [] }, tmp),
+      ).rejects.toThrow(/non-empty/);
+    });
+
+    it('throws when a permission array entry is not a string', async () => {
+      await expect(
+        // @ts-expect-error — runtime check for wrong type
+        resolvePermissions({ permission: ['git *', 42] }, tmp),
+      ).rejects.toThrow(/non-empty/);
+    });
+
+    it('preserves single-string behavior (backward compat)', async () => {
+      const r = await resolvePermissions({ permission: 'git *' }, tmp);
+      expect(r).toEqual({ expression: 'git *', extraPatterns: [] });
+    });
+  });
 });

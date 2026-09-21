@@ -5,26 +5,38 @@ import { BotwardError } from '../../utils/errors.js';
 const PERMISSION_FILE_MAX_BYTES = 1_000_000;
 
 export interface ResolvedPermissions {
-  /** The single inline expression from `cfg.permission`. */
+  /**
+   * The first inline expression from `cfg.permission`. Kept singular so that
+   * downstream consumers (e.g. user-defined tools) can still treat the
+   * primary allowlist as a single string. When `cfg.permission` is a string
+   * array, the first element lands here and the rest fall into
+   * `extraPatterns`.
+   */
   expression?: string;
-  /** Extra patterns parsed from `permissionFile` (JSON array of strings). */
+  /** Extra patterns: extra array entries from `cfg.permission`, plus all `permissionFile` entries. */
   extraPatterns: string[];
   /** Absolute path to the permission file, for tools that want to read it themselves. */
   filePath?: string;
 }
 
 /**
- * Parse `permission` (string) and `permissionFile` (path to JSON array of
- * strings) into a single payload that gets attached to LoadedTool.permissions.
+ * Parse `permission` (string or string[]) and `permissionFile` (path to JSON
+ * array of strings) into a single payload that gets attached to
+ * LoadedTool.permissions.
+ *
+ * `permission` accepts:
+ *   - a single string: that one expression becomes `expression`
+ *   - a string array: the first element becomes `expression`, the rest go
+ *     into `extraPatterns` (and merge with `permissionFile` entries by OR).
  *
  * Returns undefined when neither field is set — builtin tools then apply
  * their per-tool default policy.
  *
- * Errors are loud on purpose: a misconfigured permission file should fail
- * the botward invocation, not silently grant all-access.
+ * Errors are loud on purpose: a misconfigured permission should fail the
+ * botward invocation, not silently grant all-access.
  */
 export async function resolvePermissions(
-  cfg: { permission?: string; permissionFile?: string },
+  cfg: { permission?: string | string[]; permissionFile?: string },
   configDir: string,
 ): Promise<ResolvedPermissions | undefined> {
   if (cfg.permission === undefined && cfg.permissionFile === undefined) {
@@ -33,10 +45,16 @@ export async function resolvePermissions(
   const out: ResolvedPermissions = { extraPatterns: [] };
 
   if (cfg.permission !== undefined) {
-    if (typeof cfg.permission !== 'string' || cfg.permission.length === 0) {
-      throw new BotwardError('tool "permission" must be a non-empty string');
+    const list = Array.isArray(cfg.permission) ? cfg.permission : [cfg.permission];
+    if (list.length === 0 || list.some((s) => typeof s !== 'string' || s.length === 0)) {
+      throw new BotwardError(
+        'tool "permission" must be a non-empty string or a non-empty array of non-empty strings',
+      );
     }
-    out.expression = cfg.permission;
+    out.expression = list[0];
+    if (list.length > 1) {
+      out.extraPatterns.push(...list.slice(1));
+    }
   }
 
   if (cfg.permissionFile !== undefined) {
@@ -81,7 +99,7 @@ export async function resolvePermissions(
         `permissionFile ${abs} must be a JSON array of strings`,
       );
     }
-    out.extraPatterns = parsed as string[];
+    out.extraPatterns.push(...(parsed as string[]));
   }
 
   return out;

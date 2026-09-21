@@ -32,6 +32,21 @@ Botward 内置了一组常用工具，你可以在配置里直接按 `name` 引�
 每个元素遵循该工具的 pattern 格式。如果同时设了 `permission` 和
 `permissionFile`，最终 allowlist 是两者的并集。
 
+`permission` 也支持直接写字符串数组 —— 每个元素就是一条 allowlist 表达式
+（语法跟单字符串一致）：
+
+```json
+{
+  "name": "run_command",
+  "permission": ["git *", "npm test", "ls *"]
+}
+```
+
+这种写法跟同内容的 `permissionFile` 等效，只是写在 config 里 —— 适合
+pattern 不多、又不想单独建一个文件的场景。数组里第一个元素会作为工具的
+主 `expression`，其余追加到 `extraPatterns`。所有 pattern（inline + file）
+按 OR 组合。
+
 ---
 
 ## read_file

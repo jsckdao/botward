@@ -33,6 +33,22 @@ To use a built-in, declare it like any other tool but omit `code` and `file`:
 all built-ins: each entry follows the tool's pattern format. If you set both
 `permission` and `permissionFile`, the effective allowlist is the union.
 
+`permission` also accepts a string array — each entry is one allowlist
+pattern (same syntax as a single string):
+
+```json
+{
+  "name": "run_command",
+  "permission": ["git *", "npm test", "ls *"]
+}
+```
+
+This is equivalent to a `permissionFile` of the same array, but inline —
+useful when you only have a handful of patterns and don't want a separate
+file. The first array element is treated as the tool's main `expression`;
+the rest are appended to `extraPatterns`. All patterns (inline + file) are
+OR-combined.
+
 ---
 
 ## read_file

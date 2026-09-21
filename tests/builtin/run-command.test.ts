@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import path from 'node:path';
 import '../../src/tools/builtin/tools/run-command.js';
 import { getBuiltinTool } from '../../src/tools/builtin/registry.js';
 
@@ -53,5 +54,18 @@ describe('run_command builtin', () => {
     });
     expect(((await tool.run({ command: 'echo hi' })) as any).ok).toBe(true);
     expect(((await tool.run({ command: 'false' })) as any).ok).toBe(false);
+  });
+
+  it('end-to-end: permission: ["git *","npm test"] allows each', async () => {
+    // Drive through the actual resolvePermissions path so we test the full
+    // schema → resolver → tool plumbing, not just the factory.
+    const { resolvePermissions } = await import('../../src/tools/builtin/permissions.js');
+    const perms = await resolvePermissions(
+      { permission: ['git *', 'echo *'] },
+      path.resolve('tests/fixtures'),
+    );
+    const tool = getBuiltinTool('run_command', perms);
+    expect(((await tool.run({ command: 'echo ok' })) as any).ok).toBe(true);
+    await expect(tool.run({ command: 'rm -rf /' })).rejects.toThrow(/not in permission/);
   });
 });
