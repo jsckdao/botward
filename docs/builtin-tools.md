@@ -217,7 +217,7 @@ Executes a shell command via `spawn(shell: true)`.
 ```ts
 {
   command: string;        // required, e.g. "git status"
-  cwd?: string;
+  cwd: string;            // required, working directory
   timeoutMs?: number;     // default 30000
 }
 ```

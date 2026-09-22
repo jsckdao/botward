@@ -16,14 +16,20 @@ function build(permissions?: ResolvedPermissions): LoadedTool {
       type: 'object',
       properties: {
         command: { type: 'string', description: 'Full command string, e.g. "git status".' },
-        cwd: { type: 'string', description: 'Optional working directory.' },
+        cwd: { type: 'string', description: 'Working directory the command runs in. Required.' },
         timeoutMs: { type: 'number', description: 'Kill the process after this many ms (default 30000).' },
       },
-      required: ['command'],
+      required: ['command', 'cwd'],
     },
     run: async (args, perms) => {
       const cmd = String(args.command ?? '').trim();
       if (!cmd) throw new BotwardError('run_command: "command" is required');
+
+      const cwdRaw = args.cwd;
+      if (typeof cwdRaw !== 'string' || cwdRaw.length === 0) {
+        throw new BotwardError('run_command: "cwd" is required');
+      }
+      const cwd = cwdRaw;
 
       const effective = perms ?? permissions;
       if (!effective || (effective.expression === undefined && effective.extraPatterns.length === 0)) {
@@ -42,7 +48,6 @@ function build(permissions?: ResolvedPermissions): LoadedTool {
       }
 
       const timeoutMs = Number(args.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-      const cwd = args.cwd ? String(args.cwd) : undefined;
 
       return await runWithKill(cmd, { cwd, timeoutMs });
     },
@@ -53,7 +58,7 @@ function build(permissions?: ResolvedPermissions): LoadedTool {
 }
 
 interface RunOptions {
-  cwd?: string;
+  cwd: string;
   timeoutMs: number;
 }
 

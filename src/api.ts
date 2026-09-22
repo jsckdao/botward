@@ -48,6 +48,8 @@ export interface BotwardOptions {
 export interface ExecuteOptions {
   /** Path to a `botward.json`. Relative paths resolve against `cwd`. */
   config: string;
+  /** Working directory for Agent tools. Defaults to process.cwd(). */
+  cwd?: string;
 }
 
 export interface InitOptions {

@@ -6,7 +6,27 @@ import { getBuiltinTool } from '../../src/tools/builtin/registry.js';
 describe('run_command builtin', () => {
   it('denies when no permission is set', async () => {
     const tool = getBuiltinTool('run_command');
-    await expect(tool.run({ command: 'echo hi' })).rejects.toThrow(/denied by default/);
+    await expect(tool.run({ command: 'echo hi', cwd: process.cwd() })).rejects.toThrow(
+      /denied by default/,
+    );
+  });
+
+  it('rejects when cwd is missing', async () => {
+    const tool = getBuiltinTool('run_command', {
+      expression: 'echo *',
+      extraPatterns: [],
+    });
+    await expect(tool.run({ command: 'echo hi' })).rejects.toThrow(/"cwd" is required/);
+  });
+
+  it('rejects when cwd is empty string', async () => {
+    const tool = getBuiltinTool('run_command', {
+      expression: 'echo *',
+      extraPatterns: [],
+    });
+    await expect(tool.run({ command: 'echo hi', cwd: '' })).rejects.toThrow(
+      /"cwd" is required/,
+    );
   });
 
   it('denies commands not matching any pattern', async () => {
@@ -14,7 +34,9 @@ describe('run_command builtin', () => {
       expression: 'git *',
       extraPatterns: [],
     });
-    await expect(tool.run({ command: 'rm -rf /' })).rejects.toThrow(/not in permission/);
+    await expect(
+      tool.run({ command: 'rm -rf /', cwd: process.cwd() }),
+    ).rejects.toThrow(/not in permission/);
   });
 
   it('runs allowed commands and returns output', async () => {
@@ -22,7 +44,7 @@ describe('run_command builtin', () => {
       expression: 'echo *',
       extraPatterns: [],
     });
-    const result = await tool.run({ command: 'echo hello world' });
+    const result = await tool.run({ command: 'echo hello world', cwd: process.cwd() });
     expect(result).toMatchObject({ ok: true, exitCode: 0 });
     expect((result as any).stdout.trim()).toBe('hello world');
   });
@@ -32,7 +54,7 @@ describe('run_command builtin', () => {
       expression: 'false',
       extraPatterns: [],
     });
-    const result = await tool.run({ command: 'false' });
+    const result = await tool.run({ command: 'false', cwd: process.cwd() });
     expect((result as any).ok).toBe(false);
     expect((result as any).exitCode).not.toBe(0);
   });
@@ -43,7 +65,7 @@ describe('run_command builtin', () => {
       extraPatterns: [],
     });
     await expect(
-      tool.run({ command: 'sleep 5', timeoutMs: 200 }),
+      tool.run({ command: 'sleep 5', cwd: process.cwd(), timeoutMs: 200 }),
     ).rejects.toThrow(/timed out/);
   }, 5_000);
 
@@ -52,8 +74,12 @@ describe('run_command builtin', () => {
       expression: 'echo *',
       extraPatterns: ['false'],
     });
-    expect(((await tool.run({ command: 'echo hi' })) as any).ok).toBe(true);
-    expect(((await tool.run({ command: 'false' })) as any).ok).toBe(false);
+    expect(
+      ((await tool.run({ command: 'echo hi', cwd: process.cwd() })) as any).ok,
+    ).toBe(true);
+    expect(
+      ((await tool.run({ command: 'false', cwd: process.cwd() })) as any).ok,
+    ).toBe(false);
   });
 
   it('end-to-end: permission: ["git *","npm test"] allows each', async () => {
@@ -65,7 +91,9 @@ describe('run_command builtin', () => {
       path.resolve('tests/fixtures'),
     );
     const tool = getBuiltinTool('run_command', perms);
-    expect(((await tool.run({ command: 'echo ok' })) as any).ok).toBe(true);
-    await expect(tool.run({ command: 'rm -rf /' })).rejects.toThrow(/not in permission/);
+    expect(((await tool.run({ command: 'echo ok', cwd: process.cwd() })) as any).ok).toBe(true);
+    await expect(
+      tool.run({ command: 'rm -rf /', cwd: process.cwd() }),
+    ).rejects.toThrow(/not in permission/);
   });
 });

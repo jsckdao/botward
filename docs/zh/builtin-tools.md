@@ -211,7 +211,7 @@ link-local、loopback、ULA、组播）以及 `localhost`/`*.local` 主机名的
 ```ts
 {
   command: string;        // 必填，如 "git status"
-  cwd?: string;
+  cwd: string;            // 必填，命令执行的工作目录
   timeoutMs?: number;     // 默认 30000
 }
 ```
