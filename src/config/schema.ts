@@ -105,7 +105,80 @@ export const ConfigSchema = z.object({
   tools: z.array(ToolSchema).default([]),
 });
 
-export type SkillConfig = z.infer<typeof SkillSchema>;
-export type ToolConfig = z.infer<typeof ToolSchema>;
-export type Provider = z.infer<typeof ProviderSchema>;
-export type Config = z.infer<typeof ConfigSchema>;
+/**
+ * Public types — declared as plain interfaces (not `z.infer<>`) so the bundled
+ * `.d.ts` doesn't have to redeclare every zod schema. The schemas validate user
+ * JSON at runtime; these interfaces describe the parsed shape.
+ *
+ * The `Inferred*` aliases below stay as `z.infer<>` and are used only by the
+ * compile-time cross-check to confirm the schemas stay in sync.
+ */
+export interface SkillConfig {
+  name: string;
+  description: string;
+  content?: string;
+  dir?: string;
+}
+
+export interface ToolConfig {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  code?: string;
+  file?: string;
+  maxOutputBytes?: number;
+  timeoutMs?: number;
+  permission?: string | string[];
+  permissionFile?: string;
+}
+
+export type Provider = 'anthropic' | 'openai';
+
+export interface Config {
+  name: string;
+  version: string;
+  description?: string;
+  systemPrompt?: string;
+  provider: Provider;
+  model?: string;
+  maxIterations: number;
+  contextCompression: boolean;
+  maxContextLength: number;
+  maxContextLengthRatio: number;
+  skills: SkillConfig[];
+  tools: ToolConfig[];
+}
+
+// Compile-time cross-check: if a schema field drifts, the inferred type
+// diverges from the public interface and these `extends` checks fail.
+type InferredSkill = z.infer<typeof SkillSchema>;
+type InferredTool = z.infer<typeof ToolSchema>;
+type InferredProvider = z.infer<typeof ProviderSchema>;
+type InferredConfig = z.infer<typeof ConfigSchema>;
+type _SkillMatch = [InferredSkill] extends [SkillConfig]
+  ? [SkillConfig] extends [InferredSkill]
+    ? true
+    : never
+  : never;
+type _ToolMatch = [InferredTool] extends [ToolConfig]
+  ? [ToolConfig] extends [InferredTool]
+    ? true
+    : never
+  : never;
+type _ProviderMatch = [InferredProvider] extends [Provider]
+  ? [Provider] extends [InferredProvider]
+    ? true
+    : never
+  : never;
+type _ConfigMatch = [InferredConfig] extends [Config]
+  ? [Config] extends [InferredConfig]
+    ? true
+    : never
+  : never;
+const _schemaMatches: [_SkillMatch, _ToolMatch, _ProviderMatch, _ConfigMatch] = [
+  true,
+  true,
+  true,
+  true,
+];
+void _schemaMatches;
